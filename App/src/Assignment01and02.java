@@ -1,31 +1,28 @@
-import java.util.*;
-import java.util.stream.Collectors;
-
 public class Assignment01and02 {
-    static class AutocompleteSystem {
-        private Map<String, Integer> queryStats = new HashMap<>();
+    static class ParkingLot {
+        private String[] spots = new String[500]; // Array-based hash table
 
-        public void updateFrequency(String query) {
-            queryStats.put(query, queryStats.getOrDefault(query, 0) + 1);
-        }
+        public int parkVehicle(String licensePlate) {
+            int hash = Math.abs(licensePlate.hashCode() % 500);
+            int originalHash = hash;
+            int probes = 0;
 
-        public List<String> search(String prefix) {
-            return queryStats.entrySet().stream()
-                    .filter(e -> e.getKey().startsWith(prefix))
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(3)
-                    .map(e -> e.getKey() + " (" + e.getValue() + " searches)")
-                    .collect(Collectors.toList());
+            // Linear Probing: find next empty spot
+            while (spots[hash] != null) {
+                hash = (hash + 1) % 500;
+                probes++;
+                if (hash == originalHash) return -1; // Lot full
+            }
+
+            spots[hash] = licensePlate;
+            System.out.println("Parked " + licensePlate + " at #" + hash + " (" + probes + " probes)");
+            return hash;
         }
     }
 
     public static void main(String[] args) {
-        AutocompleteSystem ac = new AutocompleteSystem();
-        ac.updateFrequency("java tutorial");
-        ac.updateFrequency("java tutorial");
-        ac.updateFrequency("javascript");
-        ac.updateFrequency("java download");
-
-        System.out.println("Suggestions for 'jav': " + ac.search("jav"));
+        ParkingLot lot = new ParkingLot();
+        lot.parkVehicle("ABC-1234");
+        lot.parkVehicle("XYZ-9999");
     }
 }
