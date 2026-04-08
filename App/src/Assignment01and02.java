@@ -1,85 +1,66 @@
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class Assignment01and02 {
 
-    // --- Problem 3: DNS Cache Implementation ---
-    static class DNSEntry {
-        String ipAddress;
-        long expiryTime;
+    static class PlagiarismDetector {
+        // Map: n-gram string -> Set of Document IDs that contain it
+        private Map<String, Set<String>> ngramIndex = new HashMap<>();
+        private Map<String, Integer> docSizes = new HashMap<>();
 
-        DNSEntry(String ipAddress, int ttlInSeconds) {
-            this.ipAddress = ipAddress;
-            // Current time in ms + (TTL * 1000)
-            this.expiryTime = System.currentTimeMillis() + (ttlInSeconds * 1000L);
+        public void addDocument(String docId, String text) {
+            String[] words = text.toLowerCase().split("\\s+");
+            int n = 5; // Using 5-grams
+            int count = 0;
+
+            for (int i = 0; i <= words.length - n; i++) {
+                StringBuilder sb = new StringBuilder();
+                for (int j = 0; j < n; j++) sb.append(words[i + j]).append(" ");
+
+                String ngram = sb.toString().trim();
+                ngramIndex.computeIfAbsent(ngram, k -> new HashSet<>()).add(docId);
+                count++;
+            }
+            docSizes.put(docId, count);
         }
 
-        boolean isExpired() {
-            return System.currentTimeMillis() > expiryTime;
+        public void analyzeDocument(String newDocText) {
+            String[] words = newDocText.toLowerCase().split("\\s+");
+            int n = 5;
+            Map<String, Integer> matchCounts = new HashMap<>();
+            int totalNgrams = 0;
+
+            for (int i = 0; i <= words.length - n; i++) {
+                StringBuilder sb = new StringBuilder();
+                for (int j = 0; j < n; j++) sb.append(words[i + j]).append(" ");
+                String ngram = sb.toString().trim();
+                totalNgrams++;
+
+                if (ngramIndex.containsKey(ngram)) {
+                    for (String docId : ngramIndex.get(ngram)) {
+                        matchCounts.put(docId, matchCounts.getOrDefault(docId, 0) + 1);
+                    }
+                }
+            }
+
+            System.out.println("Analysis Result (Total N-grams: " + totalNgrams + "):");
+            for (Map.Entry<String, Integer> entry : matchCounts.entrySet()) {
+                double similarity = (entry.getValue() * 100.0) / totalNgrams;
+                System.out.print("-> Found " + entry.getValue() + " matches with " + entry.getKey());
+                System.out.println(" | Similarity: " + String.format("%.1f", similarity) + "%" +
+                        (similarity > 50 ? " [PLAGIARISM DETECTED]" : ""));
+            }
         }
     }
 
-    static class DNSResolver {
-        private Map<String, DNSEntry> cache = new ConcurrentHashMap<>();
-        private int hits = 0;
-        private int misses = 0;
+    public static void main(String[] args) {
+        PlagiarismDetector detector = new PlagiarismDetector();
 
-        public String resolve(String domain) {
-            long startTime = System.nanoTime();
-            DNSEntry entry = cache.get(domain);
+        // Database
+        detector.addDocument("essay_092.txt", "java is a high level class based object oriented programming language");
+        detector.addDocument("essay_089.txt", "the quick brown fox jumps over the lazy dog");
 
-            if (entry != null && !entry.isExpired()) {
-                hits++;
-                long duration = System.nanoTime() - startTime;
-                System.out.print("Cache HIT -> ");
-                return entry.ipAddress + " (retrieved in " + (duration / 1_000_000.0) + "ms)";
-            }
-
-            // Cache Miss or Expired
-            misses++;
-            if (entry != null && entry.isExpired()) {
-                System.out.print("Cache EXPIRED -> ");
-                cache.remove(domain);
-            } else {
-                System.out.print("Cache MISS -> ");
-            }
-
-            // Simulate Upstream Query
-            String ip = queryUpstreamDNS(domain);
-            cache.put(domain, new DNSEntry(ip, 5)); // 5 second TTL for testing
-            return "Query upstream -> " + ip;
-        }
-
-        private String queryUpstreamDNS(String domain) {
-            // Mock IP generation
-            return "172.217." + new Random().nextInt(255) + "." + new Random().nextInt(255);
-        }
-
-        public void getCacheStats() {
-            double total = hits + misses;
-            double hitRate = (total == 0) ? 0 : (hits / total) * 100;
-            System.out.println("\n--- DNS Cache Stats ---");
-            System.out.println("Hit Rate: " + String.format("%.2f", hitRate) + "%");
-            System.out.println("Total Requests: " + (int)total);
-        }
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        DNSResolver resolver = new DNSResolver();
-
-        // 1. Initial lookup (Miss)
-        System.out.println(resolver.resolve("google.com"));
-
-        // 2. Immediate lookup (Hit)
-        System.out.println(resolver.resolve("google.com"));
-
-        // 3. Wait for TTL to expire (Wait 6 seconds)
-        System.out.println("\nWaiting for TTL to expire...");
-        Thread.sleep(6000);
-
-        // 4. Lookup after expiry (Expired/Miss)
-        System.out.println(resolver.resolve("google.com"));
-
-        resolver.getCacheStats();
+        // Submission
+        String submission = "java is a high level class based programming language which is popular";
+        detector.analyzeDocument(submission);
     }
 }
