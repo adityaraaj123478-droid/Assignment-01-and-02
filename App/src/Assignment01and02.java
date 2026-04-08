@@ -1,45 +1,48 @@
-import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Assignment01and02 {
-    static class AnalyticsSystem {
-        private Map<String, Integer> pageViews = new HashMap<>();
-        private Map<String, Set<String>> uniqueVisitors = new HashMap<>();
-        private Map<String, Integer> trafficSources = new HashMap<>();
+    static class TokenBucket {
+        private final long maxTokens = 1000;
+        private long tokens = 1000;
+        private long lastRefillTime = System.currentTimeMillis();
+        private final long refillInterval = 3600000; // 1 hour in ms
 
-        public void processEvent(String url, String userId, String source) {
-            // Track total page views
-            pageViews.put(url, pageViews.getOrDefault(url, 0) + 1);
-
-            // Track unique visitors using a Set
-            uniqueVisitors.computeIfAbsent(url, k -> new HashSet<>()).add(userId);
-
-            // Track traffic sources
-            trafficSources.put(source, trafficSources.getOrDefault(source, 0) + 1);
+        public synchronized boolean allowRequest() {
+            refill();
+            if (tokens > 0) {
+                tokens--;
+                return true;
+            }
+            return false;
         }
 
-        public void getDashboard() {
-            System.out.println("\n--- Real-Time Analytics Dashboard ---");
-            System.out.println("Top Pages:");
+        private void refill() {
+            long now = System.currentTimeMillis();
+            if (now > lastRefillTime + refillInterval) {
+                tokens = maxTokens;
+                lastRefillTime = now;
+            }
+        }
 
-            // Sort pages by view count
-            pageViews.entrySet().stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(5)
-                    .forEach(e -> System.out.println(e.getKey() + " - " + e.getValue() +
-                            " views (" + uniqueVisitors.get(e.getKey()).size() + " unique)"));
+        public long getRemaining() { return tokens; }
+    }
 
-            System.out.println("\nTraffic Sources:");
-            trafficSources.forEach((source, count) -> System.out.println(source + ": " + count));
+    static class RateLimiter {
+        private Map<String, TokenBucket> clients = new ConcurrentHashMap<>();
+
+        public void checkRateLimit(String clientId) {
+            TokenBucket bucket = clients.computeIfAbsent(clientId, k -> new TokenBucket());
+            if (bucket.allowRequest()) {
+                System.out.println("Allowed (" + bucket.getRemaining() + " remaining)");
+            } else {
+                System.out.println("Denied (Limit exceeded for " + clientId + ")");
+            }
         }
     }
 
     public static void main(String[] args) {
-        AnalyticsSystem dashboard = new AnalyticsSystem();
-        dashboard.processEvent("/news/breaking", "user1", "Google");
-        dashboard.processEvent("/news/breaking", "user2", "Facebook");
-        dashboard.processEvent("/news/breaking", "user1", "Google"); // Repeat user
-        dashboard.processEvent("/home", "user3", "Direct");
-
-        dashboard.getDashboard();
+        RateLimiter limiter = new RateLimiter();
+        limiter.checkRateLimit("client_123");
+        limiter.checkRateLimit("client_123");
     }
 }
