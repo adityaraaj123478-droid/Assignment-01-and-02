@@ -1,48 +1,31 @@
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Assignment01and02 {
-    static class TokenBucket {
-        private final long maxTokens = 1000;
-        private long tokens = 1000;
-        private long lastRefillTime = System.currentTimeMillis();
-        private final long refillInterval = 3600000; // 1 hour in ms
+    static class AutocompleteSystem {
+        private Map<String, Integer> queryStats = new HashMap<>();
 
-        public synchronized boolean allowRequest() {
-            refill();
-            if (tokens > 0) {
-                tokens--;
-                return true;
-            }
-            return false;
+        public void updateFrequency(String query) {
+            queryStats.put(query, queryStats.getOrDefault(query, 0) + 1);
         }
 
-        private void refill() {
-            long now = System.currentTimeMillis();
-            if (now > lastRefillTime + refillInterval) {
-                tokens = maxTokens;
-                lastRefillTime = now;
-            }
-        }
-
-        public long getRemaining() { return tokens; }
-    }
-
-    static class RateLimiter {
-        private Map<String, TokenBucket> clients = new ConcurrentHashMap<>();
-
-        public void checkRateLimit(String clientId) {
-            TokenBucket bucket = clients.computeIfAbsent(clientId, k -> new TokenBucket());
-            if (bucket.allowRequest()) {
-                System.out.println("Allowed (" + bucket.getRemaining() + " remaining)");
-            } else {
-                System.out.println("Denied (Limit exceeded for " + clientId + ")");
-            }
+        public List<String> search(String prefix) {
+            return queryStats.entrySet().stream()
+                    .filter(e -> e.getKey().startsWith(prefix))
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .limit(3)
+                    .map(e -> e.getKey() + " (" + e.getValue() + " searches)")
+                    .collect(Collectors.toList());
         }
     }
 
     public static void main(String[] args) {
-        RateLimiter limiter = new RateLimiter();
-        limiter.checkRateLimit("client_123");
-        limiter.checkRateLimit("client_123");
+        AutocompleteSystem ac = new AutocompleteSystem();
+        ac.updateFrequency("java tutorial");
+        ac.updateFrequency("java tutorial");
+        ac.updateFrequency("javascript");
+        ac.updateFrequency("java download");
+
+        System.out.println("Suggestions for 'jav': " + ac.search("jav"));
     }
 }
