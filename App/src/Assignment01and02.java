@@ -1,66 +1,45 @@
 import java.util.*;
 
 public class Assignment01and02 {
+    static class AnalyticsSystem {
+        private Map<String, Integer> pageViews = new HashMap<>();
+        private Map<String, Set<String>> uniqueVisitors = new HashMap<>();
+        private Map<String, Integer> trafficSources = new HashMap<>();
 
-    static class PlagiarismDetector {
-        // Map: n-gram string -> Set of Document IDs that contain it
-        private Map<String, Set<String>> ngramIndex = new HashMap<>();
-        private Map<String, Integer> docSizes = new HashMap<>();
+        public void processEvent(String url, String userId, String source) {
+            // Track total page views
+            pageViews.put(url, pageViews.getOrDefault(url, 0) + 1);
 
-        public void addDocument(String docId, String text) {
-            String[] words = text.toLowerCase().split("\\s+");
-            int n = 5; // Using 5-grams
-            int count = 0;
+            // Track unique visitors using a Set
+            uniqueVisitors.computeIfAbsent(url, k -> new HashSet<>()).add(userId);
 
-            for (int i = 0; i <= words.length - n; i++) {
-                StringBuilder sb = new StringBuilder();
-                for (int j = 0; j < n; j++) sb.append(words[i + j]).append(" ");
-
-                String ngram = sb.toString().trim();
-                ngramIndex.computeIfAbsent(ngram, k -> new HashSet<>()).add(docId);
-                count++;
-            }
-            docSizes.put(docId, count);
+            // Track traffic sources
+            trafficSources.put(source, trafficSources.getOrDefault(source, 0) + 1);
         }
 
-        public void analyzeDocument(String newDocText) {
-            String[] words = newDocText.toLowerCase().split("\\s+");
-            int n = 5;
-            Map<String, Integer> matchCounts = new HashMap<>();
-            int totalNgrams = 0;
+        public void getDashboard() {
+            System.out.println("\n--- Real-Time Analytics Dashboard ---");
+            System.out.println("Top Pages:");
 
-            for (int i = 0; i <= words.length - n; i++) {
-                StringBuilder sb = new StringBuilder();
-                for (int j = 0; j < n; j++) sb.append(words[i + j]).append(" ");
-                String ngram = sb.toString().trim();
-                totalNgrams++;
+            // Sort pages by view count
+            pageViews.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .limit(5)
+                    .forEach(e -> System.out.println(e.getKey() + " - " + e.getValue() +
+                            " views (" + uniqueVisitors.get(e.getKey()).size() + " unique)"));
 
-                if (ngramIndex.containsKey(ngram)) {
-                    for (String docId : ngramIndex.get(ngram)) {
-                        matchCounts.put(docId, matchCounts.getOrDefault(docId, 0) + 1);
-                    }
-                }
-            }
-
-            System.out.println("Analysis Result (Total N-grams: " + totalNgrams + "):");
-            for (Map.Entry<String, Integer> entry : matchCounts.entrySet()) {
-                double similarity = (entry.getValue() * 100.0) / totalNgrams;
-                System.out.print("-> Found " + entry.getValue() + " matches with " + entry.getKey());
-                System.out.println(" | Similarity: " + String.format("%.1f", similarity) + "%" +
-                        (similarity > 50 ? " [PLAGIARISM DETECTED]" : ""));
-            }
+            System.out.println("\nTraffic Sources:");
+            trafficSources.forEach((source, count) -> System.out.println(source + ": " + count));
         }
     }
 
     public static void main(String[] args) {
-        PlagiarismDetector detector = new PlagiarismDetector();
+        AnalyticsSystem dashboard = new AnalyticsSystem();
+        dashboard.processEvent("/news/breaking", "user1", "Google");
+        dashboard.processEvent("/news/breaking", "user2", "Facebook");
+        dashboard.processEvent("/news/breaking", "user1", "Google"); // Repeat user
+        dashboard.processEvent("/home", "user3", "Direct");
 
-        // Database
-        detector.addDocument("essay_092.txt", "java is a high level class based object oriented programming language");
-        detector.addDocument("essay_089.txt", "the quick brown fox jumps over the lazy dog");
-
-        // Submission
-        String submission = "java is a high level class based programming language which is popular";
-        detector.analyzeDocument(submission);
+        dashboard.getDashboard();
     }
 }
