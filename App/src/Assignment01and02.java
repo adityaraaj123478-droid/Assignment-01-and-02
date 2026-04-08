@@ -1,61 +1,85 @@
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class Assignment01and02 {
-    // Thread-safe map for Product ID -> Stock Count
-    private final ConcurrentHashMap<String, AtomicInteger> inventory = new ConcurrentHashMap<>();
 
-    // Map for Product ID -> Ordered Waiting List (FIFO)
-    private final Map<String, LinkedHashSet<Integer>> waitingLists = new ConcurrentHashMap<>();
+    // --- Problem 3: DNS Cache Implementation ---
+    static class DNSEntry {
+        String ipAddress;
+        long expiryTime;
 
-    public void addProduct(String productId, int initialStock) {
-        inventory.put(productId, new AtomicInteger(initialStock));
-        waitingLists.put(productId, new LinkedHashSet<>());
-    }
+        DNSEntry(String ipAddress, int ttlInSeconds) {
+            this.ipAddress = ipAddress;
+            // Current time in ms + (TTL * 1000)
+            this.expiryTime = System.currentTimeMillis() + (ttlInSeconds * 1000L);
+        }
 
-    public String purchaseItem(String productId, int userId) {
-        AtomicInteger stock = inventory.get(productId);
-
-        if (stock == null) return "Product not found.";
-
-        // Attempt to decrement only if stock > 0 (Atomic operation)
-        while (true) {
-            int currentStock = stock.get();
-            if (currentStock <= 0) {
-                return addToWaitingList(productId, userId);
-            }
-
-            if (stock.compareAndSet(currentStock, currentStock - 1)) {
-                return "Success! Purchase complete for User " + userId + ". Units remaining: " + (currentStock - 1);
-            }
+        boolean isExpired() {
+            return System.currentTimeMillis() > expiryTime;
         }
     }
 
-    private synchronized String addToWaitingList(String productId, int userId) {
-        LinkedHashSet<Integer> list = waitingLists.get(productId);
-        if (list.add(userId)) {
-            return "Stock Out! User " + userId + " added to waiting list at position #" + list.size();
+    static class DNSResolver {
+        private Map<String, DNSEntry> cache = new ConcurrentHashMap<>();
+        private int hits = 0;
+        private int misses = 0;
+
+        public String resolve(String domain) {
+            long startTime = System.nanoTime();
+            DNSEntry entry = cache.get(domain);
+
+            if (entry != null && !entry.isExpired()) {
+                hits++;
+                long duration = System.nanoTime() - startTime;
+                System.out.print("Cache HIT -> ");
+                return entry.ipAddress + " (retrieved in " + (duration / 1_000_000.0) + "ms)";
+            }
+
+            // Cache Miss or Expired
+            misses++;
+            if (entry != null && entry.isExpired()) {
+                System.out.print("Cache EXPIRED -> ");
+                cache.remove(domain);
+            } else {
+                System.out.print("Cache MISS -> ");
+            }
+
+            // Simulate Upstream Query
+            String ip = queryUpstreamDNS(domain);
+            cache.put(domain, new DNSEntry(ip, 5)); // 5 second TTL for testing
+            return "Query upstream -> " + ip;
         }
-        return "User " + userId + " is already in the waiting list.";
+
+        private String queryUpstreamDNS(String domain) {
+            // Mock IP generation
+            return "172.217." + new Random().nextInt(255) + "." + new Random().nextInt(255);
+        }
+
+        public void getCacheStats() {
+            double total = hits + misses;
+            double hitRate = (total == 0) ? 0 : (hits / total) * 100;
+            System.out.println("\n--- DNS Cache Stats ---");
+            System.out.println("Hit Rate: " + String.format("%.2f", hitRate) + "%");
+            System.out.println("Total Requests: " + (int)total);
+        }
     }
 
-    public int checkStock(String productId) {
-        return inventory.containsKey(productId) ? inventory.get(productId).get() : 0;
-    }
+    public static void main(String[] args) throws InterruptedException {
+        DNSResolver resolver = new DNSResolver();
 
-    public static void main(String[] args) {
-        FlashSaleManager sale = new FlashSaleManager();
-        sale.addProduct("IPHONE15", 2); // Small stock for testing
+        // 1. Initial lookup (Miss)
+        System.out.println(resolver.resolve("google.com"));
 
-        System.out.println("Initial Stock: " + sale.checkStock("IPHONE15"));
+        // 2. Immediate lookup (Hit)
+        System.out.println(resolver.resolve("google.com"));
 
-        // Simulate purchases
-        System.out.println(sale.purchaseItem("IPHONE15", 101));
-        System.out.println(sale.purchaseItem("IPHONE15", 102));
+        // 3. Wait for TTL to expire (Wait 6 seconds)
+        System.out.println("\nWaiting for TTL to expire...");
+        Thread.sleep(6000);
 
-        // This should trigger the waiting list
-        System.out.println(sale.purchaseItem("IPHONE15", 103));
-        System.out.println(sale.purchaseItem("IPHONE15", 104));
+        // 4. Lookup after expiry (Expired/Miss)
+        System.out.println(resolver.resolve("google.com"));
+
+        resolver.getCacheStats();
     }
 }
